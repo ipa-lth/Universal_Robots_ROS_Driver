@@ -60,3 +60,9 @@ pos_traj_controller:
    stop_trajectory_duration: 0.5
    state_publish_rate: 125
    action_monitor_rate: 10
+
+
+# Pass an array of joint velocities directly to the joints
+joint_group_vel_controller:
+   type: velocity_controllers/JointGroupVelocityController
+   joints: *robot_joints
