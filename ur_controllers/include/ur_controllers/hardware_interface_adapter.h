@@ -115,7 +115,9 @@ template <class State>
 class ClosedLoopHardwareInterfaceAdapter
 {
 public:
-  ClosedLoopHardwareInterfaceAdapter() : joint_handles_ptr_(0) {}
+  ClosedLoopHardwareInterfaceAdapter() : joint_handles_ptr_(0)
+  {
+  }
 
   bool init(std::vector<ur_controllers::ScaledJointHandle>& joint_handles, ros::NodeHandle& controller_nh)
   {
@@ -150,7 +152,10 @@ public:
 
   void starting(const ros::Time& /*time*/)
   {
-    if (!joint_handles_ptr_) {return;}
+    if (!joint_handles_ptr_)
+    {
+      return;
+    }
 
     // Reset PIDs, zero commands
     for (unsigned int i = 0; i < pids_.size(); ++i)
@@ -160,12 +165,12 @@ public:
     }
   }
 
-  void stopping(const ros::Time& /*time*/) {}
+  void stopping(const ros::Time& /*time*/)
+  {
+  }
 
-  void updateCommand(const ros::Time&     /*time*/,
-                     const ros::Duration& period,
-                     const State&         desired_state,
-                     const State&         state_error)
+  void updateCommand(const ros::Time& /*time*/, const ros::Duration& period, const State& desired_state,
+                     const State& state_error)
   {
     const unsigned int n_joints = joint_handles_ptr_->size();
 
@@ -178,7 +183,8 @@ public:
     // Update PIDs
     for (unsigned int i = 0; i < n_joints; ++i)
     {
-      const double command = (desired_state.velocity[i] * velocity_ff_[i]) + pids_[i]->computeCommand(state_error.position[i], state_error.velocity[i], period);
+      const double command = (desired_state.velocity[i] * velocity_ff_[i]) +
+                             pids_[i]->computeCommand(state_error.position[i], state_error.velocity[i], period);
       (*joint_handles_ptr_)[i].setCommand(command);
     }
   }
@@ -191,18 +197,14 @@ private:
 
   std::vector<ur_controllers::ScaledJointHandle>* joint_handles_ptr_;
 };
-}
+}  // namespace ur_controllers
 
 /**
  * \brief Adapter for an velocity-controlled hardware interface. Maps position and velocity errors to velocity commands
  * through a velocity PID loop.
  *
- * The following is an example configuration of a controller that uses this adapter. Notice the \p gains and \p velocity_ff
- * entries:
- * \code
- * head_controller:
- *   type: "velocity_controllers/ScaledJointTrajectoryController"
- *   joints:
+ * The following is an example configuration of a controller that uses this adapter. Notice the \p gains and \p
+ * velocity_ff entries: \code head_controller: type: "velocity_controllers/ScaledJointTrajectoryController" joints:
  *     - head_1_joint
  *     - head_2_joint
  *   gains:
@@ -221,7 +223,9 @@ private:
  * \endcode
  */
 template <class State>
-class HardwareInterfaceAdapter<ur_controllers::ScaledVelocityJointInterface, State> : public ur_controllers::ClosedLoopHardwareInterfaceAdapter<State>
-{};
+class HardwareInterfaceAdapter<ur_controllers::ScaledVelocityJointInterface, State>
+  : public ur_controllers::ClosedLoopHardwareInterfaceAdapter<State>
+{
+};
 
 #endif  // ifndef UR_CONTROLLERS_HARDWARE_INTERFACE_ADAPTER_H_INCLUDED
