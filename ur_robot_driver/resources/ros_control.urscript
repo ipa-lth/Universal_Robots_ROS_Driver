@@ -130,6 +130,7 @@ while keepalive > 0 and control_mode > MODE_STOPPED:
 end
 
 textmsg("Stopping communication and control")
+#control_mode = MODE_STOPPED
 join thread_move
-sleep(0.1)
+textmsg("All threads ended")
 socket_close("reverse_socket")
