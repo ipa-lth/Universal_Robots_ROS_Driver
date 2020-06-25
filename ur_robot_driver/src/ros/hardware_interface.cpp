@@ -69,6 +69,7 @@ bool HardwareInterface::init(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw
   joint_velocities_ = { { 0, 0, 0, 0, 0, 0 } };
   joint_efforts_ = { { 0, 0, 0, 0, 0, 0 } };
   std::string script_filename;
+  std::string script_inst_filename;
   std::string output_recipe_filename;
   std::string input_recipe_filename;
 
@@ -93,6 +94,13 @@ bool HardwareInterface::init(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw
   if (!robot_hw_nh.getParam("script_file", script_filename))
   {
     ROS_ERROR_STREAM("Required parameter " << robot_hw_nh.resolveName("script_file") << " not given.");
+    return false;
+  }
+
+  // Path to the urscript code that will be sent to the robot.
+  if (!robot_hw_nh.getParam("script_inst_file", script_inst_filename))
+  {
+    ROS_ERROR_STREAM("Required parameter " << robot_hw_nh.resolveName("script_inst_file") << " not given.");
     return false;
   }
 
@@ -250,7 +258,7 @@ bool HardwareInterface::init(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw
   ROS_INFO_STREAM("Initializing urdriver");
   try
   {
-    ur_driver_.reset(new UrDriver(robot_ip_, script_filename, output_recipe_filename, input_recipe_filename,
+    ur_driver_.reset(new UrDriver(robot_ip_, script_filename, script_inst_filename, output_recipe_filename, input_recipe_filename,
                                   std::bind(&HardwareInterface::handleRobotProgramState, this, std::placeholders::_1),
                                   headless_mode, std::move(tool_comm_setup), calibration_checksum,
                                   (uint32_t)reverse_port, (uint32_t)script_sender_port, servoj_gain,

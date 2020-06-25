@@ -47,7 +47,7 @@ static const std::string SERVO_J_REPLACE("{{SERVO_J_REPLACE}}");
 static const std::string SERVER_IP_REPLACE("{{SERVER_IP_REPLACE}}");
 static const std::string SERVER_PORT_REPLACE("{{SERVER_PORT_REPLACE}}");
 
-ur_driver::UrDriver::UrDriver(const std::string& robot_ip, const std::string& script_file,
+ur_driver::UrDriver::UrDriver(const std::string& robot_ip, const std::string& script_file, const std::string& script_file_inst,
                               const std::string& output_recipe_file, const std::string& input_recipe_file,
                               std::function<void(bool)> handle_program_state, bool headless_mode,
                               std::unique_ptr<ToolCommSetup> tool_comm_setup, const std::string& calibration_checksum,
@@ -87,56 +87,22 @@ ur_driver::UrDriver::UrDriver(const std::string& robot_ip, const std::string& sc
   std::string local_ip = rtde_client_->getIP();
 
   std::string prog = readScriptFile(script_file);
-  while (prog.find(JOINT_STATE_REPLACE) != std::string::npos)
-  {
-    prog.replace(prog.find(JOINT_STATE_REPLACE), JOINT_STATE_REPLACE.length(), std::to_string(MULT_JOINTSTATE));
-  }
-
-  std::ostringstream out;
-  out << "lookahead_time=" << servoj_lookahead_time_ << ", gain=" << servoj_gain_;
-  while (prog.find(SERVO_J_REPLACE) != std::string::npos)
-  {
-    prog.replace(prog.find(SERVO_J_REPLACE), SERVO_J_REPLACE.length(), out.str());
-  }
-
-  while (prog.find(SERVER_IP_REPLACE) != std::string::npos)
-  {
-    prog.replace(prog.find(SERVER_IP_REPLACE), SERVER_IP_REPLACE.length(), local_ip);
-  }
-
-  while (prog.find(SERVER_PORT_REPLACE) != std::string::npos)
-  {
-    prog.replace(prog.find(SERVER_PORT_REPLACE), SERVER_PORT_REPLACE.length(), std::to_string(reverse_port));
-  }
-
-  robot_version_ = rtde_client_->getVersion();
-
-  std::stringstream begin_replace;
-  if (tool_comm_setup != nullptr)
-  {
-    if (robot_version_.major < 5)
-    {
-      throw ToolCommNotAvailable("Tool communication setup requested, but this robot version does not support using "
-                                 "the tool communication interface. Please check your configuration.",
-                                 5, robot_version_.major);
-    }
-    begin_replace << "set_tool_voltage("
-                  << static_cast<std::underlying_type<ToolVoltage>::type>(tool_comm_setup->getToolVoltage()) << ")\n";
-    begin_replace << "set_tool_communication("
-                  << "True"
-                  << ", " << tool_comm_setup->getBaudRate() << ", "
-                  << static_cast<std::underlying_type<Parity>::type>(tool_comm_setup->getParity()) << ", "
-                  << tool_comm_setup->getStopBits() << ", " << tool_comm_setup->getRxIdleChars() << ", "
-                  << tool_comm_setup->getTxIdleChars() << ")";
-  }
-  prog.replace(prog.find(BEGIN_REPLACE), BEGIN_REPLACE.length(), begin_replace.str());
+  prog = findAndReplace(prog, tool_comm_setup.get(), local_ip);
+  std::string inst = readScriptFile(script_file_inst);
+  inst = findAndReplace(inst, tool_comm_setup.get(), local_ip);
 
   in_headless_mode_ = headless_mode;
   if (in_headless_mode_)
   {
     full_robot_program_ = "def externalControl():\n";
-    std::istringstream prog_stream(prog);
+    std::istringstream inst_stream(inst);
     std::string line;
+    while (std::getline(inst_stream, line))
+    {
+      full_robot_program_ += "\t" + line + "\n";
+    }
+
+    std::istringstream prog_stream(prog);
     while (std::getline(prog_stream, line))
     {
       full_robot_program_ += "\t" + line + "\n";
@@ -146,7 +112,7 @@ ur_driver::UrDriver::UrDriver(const std::string& robot_ip, const std::string& sc
   }
   else
   {
-    script_sender_.reset(new comm::ScriptSender(script_sender_port, prog));
+    script_sender_.reset(new comm::ScriptSender(script_sender_port, inst, prog));
     script_sender_->start();
     LOG_DEBUG("Created script sender");
   }
@@ -242,6 +208,57 @@ std::string UrDriver::readScriptFile(const std::string& filename)
 
   return content;
 }
+
+std::string UrDriver::findAndReplace(const std::string& prog, ToolCommSetup* tool_comm_setup, const std::string& local_ip)
+{
+  std::string content = prog;
+  while (content.find(JOINT_STATE_REPLACE) != std::string::npos)
+  {
+    content.replace(content.find(JOINT_STATE_REPLACE), JOINT_STATE_REPLACE.length(), std::to_string(MULT_JOINTSTATE));
+  }
+
+  std::ostringstream out;
+  out << "lookahead_time=" << servoj_lookahead_time_ << ", gain=" << servoj_gain_;
+  while (content.find(SERVO_J_REPLACE) != std::string::npos)
+  {
+    content.replace(content.find(SERVO_J_REPLACE), SERVO_J_REPLACE.length(), out.str());
+  }
+
+  while (content.find(SERVER_IP_REPLACE) != std::string::npos)
+  {
+    content.replace(content.find(SERVER_IP_REPLACE), SERVER_IP_REPLACE.length(), local_ip);
+  }
+
+  while (content.find(SERVER_PORT_REPLACE) != std::string::npos)
+  {
+    content.replace(content.find(SERVER_PORT_REPLACE), SERVER_PORT_REPLACE.length(), std::to_string(reverse_port_));
+  }
+
+  robot_version_ = rtde_client_->getVersion();
+
+  std::stringstream begin_replace;
+  if (tool_comm_setup != nullptr)
+  {
+    if (robot_version_.major < 5)
+    {
+      throw ToolCommNotAvailable("Tool communication setup requested, but this robot version does not support using "
+                                 "the tool communication interface. Please check your configuration.",
+                                 5, robot_version_.major);
+    }
+    begin_replace << "set_tool_voltage("
+                  << static_cast<std::underlying_type<ToolVoltage>::type>(tool_comm_setup->getToolVoltage()) << ")\n";
+    begin_replace << "set_tool_communication("
+                  << "True"
+                  << ", " << tool_comm_setup->getBaudRate() << ", "
+                  << static_cast<std::underlying_type<Parity>::type>(tool_comm_setup->getParity()) << ", "
+                  << tool_comm_setup->getStopBits() << ", " << tool_comm_setup->getRxIdleChars() << ", "
+                  << tool_comm_setup->getTxIdleChars() << ")";
+  }
+  content.replace(content.find(BEGIN_REPLACE), BEGIN_REPLACE.length(), begin_replace.str());
+
+  return content;
+}
+
 std::string UrDriver::readKeepalive()
 {
   if (reverse_interface_active_)

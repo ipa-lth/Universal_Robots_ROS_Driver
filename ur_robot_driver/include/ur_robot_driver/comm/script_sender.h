@@ -50,7 +50,13 @@ public:
    * \param port Port to start the server on
    * \param program Program to send to the robot upon request
    */
-  ScriptSender(uint32_t port, const std::string& program) : server_(port), script_thread_(), program_(program)
+  ScriptSender(uint32_t port,
+               const std::string& install,
+               const std::string& program) :
+    server_(port),
+    script_thread_(),
+    install_(install),
+    program_(program)
   {
     if (!server_.bind())
     {
@@ -69,9 +75,12 @@ public:
 private:
   URServer server_;
   std::thread script_thread_;
+  std::string install_;
   std::string program_;
 
   const std::string PROGRAM_REQUEST_ = std::string("request_program\n");
+  const std::string INSTALL_REQUEST_ = std::string("request_install\n");
+  enum request_type {install, program, error};
 
   void runScriptSender()
   {
@@ -81,16 +90,25 @@ private:
       {
         throw std::runtime_error("Failed to accept robot connection");
       }
-      if (requestRead())
+      request_type req = requestRead();
+      if (req != error)
       {
-        LOG_INFO("Robot requested program");
-        sendProgram();
+        if (req == program)
+        {
+          LOG_INFO("Robot requested program");
+          send(program_);
+        }
+        else if (req == install) {
+          LOG_INFO("Robot requested install");
+          send(install_);
+        }
+
       }
       server_.disconnectClient();
     }
   }
 
-  bool requestRead()
+  request_type requestRead()
   {
     size_t buf_len = 1024;
     char buffer[buf_len];
@@ -101,7 +119,11 @@ private:
     {
       if (std::string(buffer) == PROGRAM_REQUEST_)
       {
-        return true;
+        return program;
+      }
+      else if (std::string(buffer) == INSTALL_REQUEST_)
+      {
+        return install;
       }
       else
       {
@@ -112,13 +134,13 @@ private:
     {
       LOG_WARN("Could not read on script request port");
     }
-    return false;
+    return error;
   }
 
-  void sendProgram()
+  void send(std::string text)
   {
-    size_t len = program_.size();
-    const uint8_t* data = reinterpret_cast<const uint8_t*>(program_.c_str());
+    size_t len = text.size();
+    const uint8_t* data = reinterpret_cast<const uint8_t*>(text.c_str());
     size_t written;
 
     if (server_.write(data, len, written))
@@ -130,6 +152,7 @@ private:
       LOG_ERROR("Could not send program to robot");
     }
   }
+
 };
 
 }  // namespace comm
